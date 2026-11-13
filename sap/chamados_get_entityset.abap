@@ -29,7 +29,7 @@ IF lv_numero IS INITIAL.
   RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
     EXPORTING
       textid = /iwbep/cx_mgw_busi_exception=>business_error_unlimited
-      message_unlimited = `Informe o filtro ObjectId eq '4000000145' com o número do chamado`
+      message_unlimited = `Informe o número do chamado no filtro ObjectId`
       http_status_code = '400'.
 ENDIF.
 

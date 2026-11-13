@@ -8,17 +8,17 @@ import httpx
 from app.config import Settings
 from app.main import app
 
-SERVICE_URL = "https://sap-dev.example/sap/opu/odata/SAP/ZCHAMADOSOLMAN_SRV"
-CHAMADO_URL = "/api/v1/chamados?numero=4000000145"
+SERVICE_URL = "https://sap-dev.example/sap/opu/odata/SAP/ZCHAMADOS_DEMO_SRV"
+CHAMADO_URL = "/api/v1/chamados?numero=0000000123"
 ROW = {
     "__metadata": {"uri": "http://sap-interno.example"},
-    "Guid": "f45b302b-8ad0-1fe0-bdc7-2e70195398f6",
-    "ObjectId": "4000000145",
+    "Guid": "12345678-1234-4abc-8def-123456789abc",
+    "ObjectId": "0000000123",
     "ProcessType": "Test",
     "Description": "Chamado de teste",
-    "CreatedAt": "/Date(1768938726000)/",
+    "CreatedAt": "/Date(1704103200000)/",
     "CreatedBy": "USUARIO_TESTE",
-    "ChangedAt": "/Date(1791297496000)/",
+    "ChangedAt": "/Date(1704193200000)/",
     "ChangedBy": "USUARIO_TESTE",
 }
 
@@ -60,18 +60,18 @@ class TestApi(IsolatedAsyncioTestCase):
             self.assertEqual(request.url.params["sap-client"], "001")
             if "$skiptoken" in request.url.params:
                 return httpx.Response(200, json={"d": {"results": [
-                    {**ROW, "Stat": "E0013", "Txt30": "MPT Excedido"},
-                    {**ROW, "Stat": "I1003", "Txt30": ""},
-                    {**ROW, "Stat": "I1035", "Txt30": ""},
+                    {**ROW, "Stat": "E9002", "Txt30": "Prazo de teste excedido"},
+                    {**ROW, "Stat": "I9001", "Txt30": ""},
+                    {**ROW, "Stat": "I9002", "Txt30": ""},
                 ]}})
 
-            self.assertEqual(request.url.params["$filter"], "ObjectId eq '4000000145'")
+            self.assertEqual(request.url.params["$filter"], "ObjectId eq '0000000123'")
             self.assertEqual(request.url.params["$format"], "json")
-            self.assertIn(b"ObjectId%20eq%20'4000000145'", request.url.query)
+            self.assertIn(b"ObjectId%20eq%20'0000000123'", request.url.query)
             return httpx.Response(200, json={"d": {
                 "results": [
-                    {**ROW, "Stat": "E0003", "Txt30": "Em Desenvolvimento"},
-                    {**ROW, "Stat": "E0013", "Txt30": ""},
+                    {**ROW, "Stat": "E9001", "Txt30": "Em Desenvolvimento"},
+                    {**ROW, "Stat": "E9002", "Txt30": ""},
                 ],
                 "__next": "http://sap-interno.example" + request.url.path + "?$skiptoken=2",
             }})
@@ -81,24 +81,24 @@ class TestApi(IsolatedAsyncioTestCase):
 
         self.assertEqual(resposta.status_code, 200)
         (chamado,) = resposta.json()["chamados"]
-        self.assertEqual(chamado["numero"], "4000000145")
-        self.assertEqual(chamado["criado_em"], "2026-01-20T19:52:06Z")
+        self.assertEqual(chamado["numero"], "0000000123")
+        self.assertEqual(chamado["criado_em"], "2024-01-01T10:00:00Z")
         self.assertNotIn("__metadata", chamado)
         self.assertIsNone(chamado["parceiros"])
         self.assertIsNone(chamado["referencias_externas"])
         self.assertIsNone(chamado["textos"])
         self.assertEqual(chamado["status"], [
-            {"codigo": "E0003", "descricao": "Em Desenvolvimento"},
-            {"codigo": "E0013", "descricao": "MPT Excedido"},
-            {"codigo": "I1003", "descricao": None},
-            {"codigo": "I1035", "descricao": None},
+            {"codigo": "E9001", "descricao": "Em Desenvolvimento"},
+            {"codigo": "E9002", "descricao": "Prazo de teste excedido"},
+            {"codigo": "I9001", "descricao": None},
+            {"codigo": "I9002", "descricao": None},
         ])
 
     async def test_carrega_detalhes_uma_vez_por_guid(self):
         requisicoes_detalhes = []
-        cabecalho = {**ROW, "CreatedAt": "20260120195206", "ChangedAt": "20261006143816"}
+        cabecalho = {**ROW, "CreatedAt": "20240101100000", "ChangedAt": "20240102110000"}
         detalhes = {
-            "status": [{"codigo": "I1003", "descricao": "Status do sistema"}],
+            "status": [{"codigo": "I9001", "descricao": "Status do sistema"}],
             "parceiros": [
                 {"funcao": "Z001", "descricao": "Consultor", "numero_bp": "0010", "nome": "Pessoa Teste"},
             ],
@@ -110,10 +110,10 @@ class TestApi(IsolatedAsyncioTestCase):
 
         def sap(request):
             if request.url.path.endswith("/ChamadoSet"):
-                self.assertEqual(request.url.params["$filter"], "ObjectId eq '4000000145'")
+                self.assertEqual(request.url.params["$filter"], "ObjectId eq '0000000123'")
                 return httpx.Response(200, json={"d": {"results": [
-                    {**cabecalho, "Stat": "E0003"},
-                    {**cabecalho, "Stat": "I1003"},
+                    {**cabecalho, "Stat": "E9001"},
+                    {**cabecalho, "Stat": "I9001"},
                 ]}})
 
             requisicoes_detalhes.append(request)
@@ -131,8 +131,8 @@ class TestApi(IsolatedAsyncioTestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertEqual(len(requisicoes_detalhes), 1)
         (chamado,) = resposta.json()["chamados"]
-        self.assertEqual(chamado["criado_em"], "2026-01-20T19:52:06Z")
-        self.assertEqual(chamado["atualizado_em"], "2026-10-06T14:38:16Z")
+        self.assertEqual(chamado["criado_em"], "2024-01-01T10:00:00Z")
+        self.assertEqual(chamado["atualizado_em"], "2024-01-02T11:00:00Z")
         for campo, valor in detalhes.items():
             self.assertEqual(chamado[campo], valor)
 
