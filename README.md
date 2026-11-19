@@ -1,6 +1,10 @@
 # API SolMan
 
-API de leitura para consultar um chamado por número. O FastAPI faz chamadas `GET` HTTP ou HTTPS diretamente ao serviço OData configurado em `SAP_SERVICE_URL`. Execute a API em uma máquina conectada à VPN corporativa ou em um servidor com acesso à mesma rede interna.
+API de leitura para consultar chamados por número. Cada consulta válida faz **um único GET** no SAP Gateway com o `ObjectId` na URI, em `ChamadoUnificadoSet('NUMERO')`. O Gateway devolve o cabeçalho e os detalhes juntos.
+
+Execute a API em uma máquina conectada à VPN corporativa ou em um servidor com acesso à rede interna. A raiz do serviço e o nome da coleção são configuráveis no `.env`.
+
+Este README é a referência do fluxo unificado. O guia Word existente foi preservado com suas alterações locais e pode conter instruções do fluxo anterior.
 
 ## Iniciar no Windows
 
@@ -17,17 +21,25 @@ notepad .env
 
 | Variável | Valor |
 |---|---|
-| `SAP_SERVICE_URL` | URL HTTPS da raiz do serviço informada pela equipe SAP, sem o nome da coleção nem parâmetros. O endereço em `.env.example` é fictício. |
+| `SAP_SERVICE_URL` | Obrigatória. URL da raiz do serviço informada pela equipe SAP, sem coleção nem parâmetros. Prefira HTTPS. Não há endereço padrão. |
 | `SAP_CLIENT` | Mandante de três dígitos confirmado pelo Basis. Vazio usa o mandante padrão do serviço. |
 | `SAP_USERNAME` e `SAP_PASSWORD` | Usuário e senha da conta técnica de leitura, se o serviço aceitar HTTP Basic. Preencha os dois. Coloque aspas simples ao redor da senha se contiver espaços ou `#`. |
 | `SAP_BEARER_TOKEN` | Token aceito pelo próprio serviço SAP, se esse for o método confirmado. Deixe usuário e senha vazios nesse caso. |
 | `SAP_CA_FILE` | Caminho opcional para o certificado CA corporativo em PEM, se necessário para HTTPS. |
 | `SAP_TIMEOUT_SECONDS` | Tempo máximo da consulta ao SAP, em segundos. O padrão é `15`. |
-| `SAP_CHAMADOS_ENTITY_SET` | Coleção para consulta por número. O exemplo usa `ChamadoSet`. |
-| `SAP_DETAILS_ENTITY_SET` | Coleção para consulta dos detalhes. O exemplo usa `DetalheChamadoSet`. |
+| `SAP_CHAMADOS_ENTITY_SET` | Obrigatória. Use `ChamadoUnificadoSet` ou o nome publicado no `$metadata` do ambiente. Informe somente o nome. |
 | `API_TOKEN` | Token opcional que o servidor do front-end envia à API no cabeçalho `Authorization: Bearer`. É independente da credencial do SAP. Deixe vazio para um teste local. |
 
 Use a URL e o método de autenticação liberados para a conta técnica no DEV. Depois de registrar um novo serviço, valide a chamada com a mesma conta que a API utiliza.
+
+Use a raiz do serviço do ambiente e o nome da coleção para preencher as duas variáveis. Exemplo com host fictício.
+
+```dotenv
+SAP_SERVICE_URL=https://sap.example.com/sap/opu/odata/SAP/ZSOLMAN_API_SRV
+SAP_CHAMADOS_ENTITY_SET=ChamadoUnificadoSet
+```
+
+Reinicie o Uvicorn após alterar o `.env`.
 
 ```powershell
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
@@ -44,22 +56,36 @@ Se configurou `API_TOKEN`, use **Authorize** no Swagger. `GET /health` verifica 
 
 ## Contrato da consulta
 
-Use `GET /api/v1/chamados?numero=0000000123`. Envie `numero` como texto com 1 a 10 dígitos para preservar zeros à esquerda. A API consulta o SAP pelo `ObjectId` e devolve `{ "chamados": [...] }`, com um item por `guid`. Se houver mais de um resultado, mostre os chamados para seleção e use `guid` como chave da lista. As datas são retornadas em ISO 8601 UTC quando preenchidas.
+Use `GET /api/v1/chamados?numero=0000000123`. Envie `numero` como texto com 1 a 10 dígitos para preservar zeros à esquerda. A API consulta o SAP por `ObjectId` e devolve `{"chamados": [...]}` com um item quando o chamado existe. Para um chamado inexistente, devolve `{"chamados": []}`. As datas de criação e atualização preenchidas são retornadas em ISO 8601 UTC.
 
 ### Campos da tela
 
 Os identificadores deste guia são fictícios. Para testar, use um chamado do mesmo ambiente e mandante da API.
 
-| Campo na tela | Campo no JSON | O que já pode ser usado |
+| Campo na tela | Campo no JSON | Valor |
 |---|---|---|
-| **ID** | `chamados[].numero` | Retornado como texto. Use `guid` como identificador interno do item. |
-| **Consultor Funcional Responsável** | `chamados[].parceiros[]` | A lista traz `funcao`, `descricao`, `numero_bp` e `nome`. Confirme o código `funcao` no SAP com um chamado preenchido e filtre por esse código. |
-| **Desenvolvedor** | `chamados[].parceiros[]` | Use o código da função de desenvolvedor após validá-lo no SAP. |
-| **Status** | `chamados[].status[]` | A API retorna os status ativos com `codigo` e `descricao`. Para exibir um único rótulo como **Novo**, confirme a regra de status principal do SolMan para o `tipo_processo`. Enquanto isso, exiba os status como lista. |
-| **Nº Externo** | `chamados[].referencias_externas[].numero` | A API prevê `tipo`, `descricao` e `numero`. Valide o `tipo` correspondente ao campo da tela em um chamado preenchido. Se o valor aparecer no WebClient e estiver ausente da lista, identifique a origem técnica com **F2** para ajustar a leitura ABAP. |
-| **Log de texto** | `chamados[].textos[]` | Confirmado. Cada bloco tem `tipo`, `idioma` e `linhas[]`, com `formato` e `texto`. O contrato atual entrega o conteúdo das linhas. Para exibir autor, data e hora como campos separados por entrada, é preciso incluí-los no retorno SAP e na API. |
+| **ID** | `chamados[].numero` | Número do chamado como texto. |
+| **Consultor Funcional Responsável** | `chamados[].consultor_funcional` | Nome publicado em `ConsultorFuncional`, ou `""` quando vazio. |
+| **Desenvolvedor ABAP** | `chamados[].desenvolvedor_abap` | Nome publicado em `DesenvolvedorAbap`, ou `""` quando vazio. |
+| **Status** | `chamados[].status` | Texto recebido em `Status`, por exemplo `NEW (Novo)`. |
+| **Nº Externo** | `chamados[].numero_externo` | Texto recebido em `ReferenciasExternas`, ou `null` quando vazio. |
+| **Log de texto** | `chamados[].textos` | String de `Textos`, com as quebras de linha e os espaços do SAP. |
+| **Estimativa em horas** | `chamados[].estimativa` | Decimal de `Estimativa` como string, por exemplo `"89.000"`. Retorna `null` quando ausente. |
+| **Início do desenvolvimento** | `chamados[].data_inicio_desenvolvimento` | Data de `DtIniDesenv`, em `DD-MM-YYYY` no formato OData atual. |
+| **Fim do desenvolvimento** | `chamados[].data_fim_desenvolvimento` | Data de `DtFimDesenv`, em `DD-MM-YYYY` no formato OData atual. |
+| **Data desejada pelo cliente** | `chamados[].data_desejada_cliente` | Data de `DtDesejCliente`, em `DD-MM-YYYY` no formato OData atual. |
 
-Para listas de detalhes, `null` indica que a consulta de detalhes está sem configuração e `[]` indica que o SAP retornou zero itens para aquela lista.
+### Contrato esperado do OData unificado
+
+Exemplo de URI montada pela API.
+
+```text
+{SAP_SERVICE_URL}/{SAP_CHAMADOS_ENTITY_SET}('0000000123')?$format=json
+```
+
+Quando configurado, `sap-client` é acrescentado à query. O Gateway devolve uma entidade diretamente em `d` com os campos de cabeçalho e detalhes. A API verifica se o `ObjectId` corresponde ao número solicitado e valida os campos de detalhes conforme seus tipos. `Estimativa` tem precisão 13 e escala 3. As três datas de planejamento são `Edm.DateTime` no Gateway e chegam como `/Date(...)/`. A API devolve essas datas em `DD-MM-YYYY` para exibição direta. Datas ausentes ou nulas retornam `null`. Para ambientes com o contrato anterior, o decimal zero retorna `null` e os demais decimais continuam sendo repassados como strings. [Exemplo de resposta do SAP](sap/resposta_unificada.example.json)
+
+O `404` do Gateway com código OData `/IWBEP/CM_MGW_RT/020` indica chamado inexistente. Outros `404` do Gateway viram `502`. As datas do cabeçalho aceitam `/Date(...)/` e timestamps SAP de 14 dígitos, inclusive com fração decimal. Datas vazias ou zeradas tornam-se `null`.
 
 ## Consumir no front-end
 
@@ -122,71 +148,61 @@ export async function buscarChamados(numero, signal) {
   }
   return dados.chamados
 }
+```
 
-export function nomesPorFuncao(parceiros, codigo) {
-  if (parceiros == null || !codigo) return null
+Mostre **—** nos campos vazios. Aplique essa regra na apresentação para valores `null`, ausentes ou compostos apenas de espaços. Uma estimativa `"0.000"` é um valor presente.
 
-  return parceiros
-    .filter(({ funcao }) => funcao === codigo)
-    .map(({ nome }) => nome.trim())
-    .filter(Boolean)
+Quando `chamado.textos` tiver conteúdo, mostre **Ver log** com o painel fechado. Ao abrir o painel, exiba o texto completo. Para um log vazio, mostre **—**.
+
+```js
+export function valorDoCampo(valor) {
+  if (valor == null || (typeof valor === 'string' && valor.trim() === '')) {
+    return '—'
+  }
+  return valor
 }
 
-export function textoDoLog(bloco) {
-  return bloco.linhas.map(({ texto }) => texto).join('\n')
+export function exibirLog(elemento, textos) {
+  if (!textos?.trim()) {
+    elemento.textContent = '—'
+    return
+  }
+
+  const painel = document.createElement('details')
+  const rotulo = document.createElement('summary')
+  rotulo.textContent = 'Ver log'
+
+  const conteudo = document.createElement('pre')
+  conteudo.style.whiteSpace = 'pre-wrap'
+  conteudo.textContent = textos
+
+  painel.append(rotulo, conteudo)
+  elemento.replaceChildren(painel)
 }
 ```
 
-- **Status.** Use `chamado.status.map(({ descricao, codigo }) => descricao ?? codigo)` para montar os rótulos.
-- **Parceiros.** Quando os códigos estiverem confirmados, chame `nomesPorFuncao(chamado.parceiros, codigo)` uma vez para cada papel. Exiba os nomes encontrados. Mostre **Sem atribuição** quando a lista de nomes estiver vazia e reserve **Indisponível** para detalhes sem configuração ou papéis ainda sem mapeamento.
-- **Nº Externo.** Exiba `numero` da referência que tiver o `tipo` confirmado. Use **Sem referência externa** para `[]` e **Indisponível** para `null`.
-- **Log de texto.** Preserve a ordem dos blocos e das linhas recebidas. Use `textoDoLog` e renderize como texto com `white-space: pre-wrap` para preservar espaços e quebras de linha. Os códigos `tipo` e `idioma` podem aparecer como rótulos até que suas descrições sejam mapeadas.
+`exibirLog` usa `trim()` para verificar se há conteúdo e passa `textos` integralmente para o painel, preservando as quebras de linha, as linhas vazias e os espaços.
 
 | Resposta | Estado da tela |
 |---|---|
-| `200` com resultados | Mostre o chamado ou permita escolher quando houver mais de um. |
+| `200` com um item em `chamados` | Mostre o chamado. |
 | `200` com `chamados: []` | Mostre **Chamado não encontrado neste ambiente**. |
 | `401` | Token da API ausente ou inválido. Verifique a autenticação no servidor que encaminha a chamada. |
 | `422` | Oriente o usuário a conferir o número informado. |
 | `502`, `504` ou erro de rede | Mostre **Não foi possível consultar o SAP agora**. Permita uma nova tentativa. |
 
-## Criar o serviço independente no SAP DEV
+## Validar o serviço no SAP DEV
 
-1. Na `SEGW` do backend DEV que tem os dados do CRM/SolMan, crie um projeto com tipo **Service with SAP Annotations** e geração **Standard/Default**. Os passos usam `ZCHAMADOS_DEMO` como nome de exemplo. Use o pacote indicado para os objetos Z do projeto.
-2. Em **Data Model → Import → DDIC Structure**, importe `CRMD_ORDERADM_H` como entidade `Chamado`, selecionando apenas os oito campos abaixo. Confirme os nomes OData e tipos na tabela de propriedades. Crie em **Entity Sets** a coleção `ChamadoSet` para `Chamado`. Marque `Guid` como chave e `ObjectId` como filtrável.
+1. No `/IWFND/GW_CLIENT`, confira no `$metadata` que `ObjectId` é a chave. `Status`, `ConsultorFuncional`, `DesenvolvedorAbap`, `ReferenciasExternas` e `Textos` são `Edm.String`. `Estimativa` é `Edm.Decimal`, e `DtIniDesenv`, `DtFimDesenv` e `DtDesejCliente` são `Edm.DateTime`.
+2. Consulte `/sap/opu/odata/SAP/ZSOLMAN_API_SRV/ChamadoUnificadoSet('0000000123')?$format=json` com um número válido no mandante da API. Compare o status, os responsáveis, o número externo e o log com o SolMan.
+3. Use o Swagger da API para repetir a consulta. Valide também um chamado sem referência externa e uma chave inexistente.
 
-   | Propriedade OData | Campo ABAP | Tipo OData |
-   |---|---|---|
-   | `Guid` | `GUID` | `Edm.Guid` |
-   | `ObjectId` | `OBJECT_ID` | `Edm.String` |
-   | `Description` | `DESCRIPTION` | `Edm.String` |
-   | `ProcessType` | `PROCESS_TYPE` | `Edm.String` |
-   | `CreatedAt` | `CREATED_AT` | `Edm.Decimal` no DEV |
-   | `CreatedBy` | `CREATED_BY` | `Edm.String` |
-   | `ChangedAt` | `CHANGED_AT` | `Edm.Decimal` no DEV |
-   | `ChangedBy` | `CHANGED_BY` | `Edm.String` |
-
-3. Crie a entidade `DetalheChamado` e a coleção `DetalheChamadoSet`. Adicione `Guid` como chave `Edm.Guid` e campo ABAP `GUID` do tipo `CRMT_OBJECT_GUID` (`RAW16`). Adicione `DadosJson` como `Edm.String`, campo ABAP `DADOS_JSON` do tipo `STRING`. Se preferir importar os tipos, crie uma estrutura Z no `SE11` com esses dois componentes e importe-a na `SEGW`.
-4. Salve, execute **Generate Runtime Objects** e anote o nome técnico gerado. No exemplo, ele é `ZCHAMADOS_DEMO_SRV`. Em **Service Implementation**, redefina os métodos correspondentes na `DPC_EXT`. Cole cada corpo entre `METHOD` e `ENDMETHOD` e faça a verificação de sintaxe.
-
-   | Coleção | Operação | Código ABAP |
-   |---|---|---|
-   | `ChamadoSet` | `GetEntitySet (Query)` | [Consulta por número](sap/chamados_get_entityset.abap) |
-   | `DetalheChamadoSet` | `GetEntity (Read)` | [Leitura dos detalhes](sap/detalhes_chamado_get_entity.abap) |
-
-5. No Gateway DEV, abra `/IWFND/MAINT_SERVICE`, escolha **Add Service** e **Get Services** usando o alias que aponta para o backend onde o projeto foi criado. Adicione o serviço gerado, confira o nó ICF e confirme que a conta técnica tem acesso ao serviço.
-6. No `/IWFND/GW_CLIENT`, use os exemplos abaixo para testar as três chamadas `GET`. Troque o nome do serviço e o número pelos valores do seu ambiente. O `$metadata` deve listar as duas coleções. A segunda URI retorna os cabeçalhos do ID. Use o `Guid` da resposta na terceira URI, que devolve os detalhes em `d.DadosJson`.
-
-   ```text
-   /sap/opu/odata/SAP/ZCHAMADOS_DEMO_SRV/$metadata
-   /sap/opu/odata/SAP/ZCHAMADOS_DEMO_SRV/ChamadoSet?$filter=ObjectId%20eq%20'0000000123'&$format=json
-   /sap/opu/odata/SAP/ZCHAMADOS_DEMO_SRV/DetalheChamadoSet(guid'12345678-1234-4ABC-8DEF-123456789ABC')?$format=json
-   ```
-
-7. Após testar, aponte `SAP_SERVICE_URL` para a raiz do serviço registrado e use `SAP_CHAMADOS_ENTITY_SET=ChamadoSet` e `SAP_DETAILS_ENTITY_SET=DetalheChamadoSet` no `.env`. Reinicie a API e consulte o número pelo Swagger. Para conferir os campos da tela, use um chamado com consultor, desenvolvedor, número externo e log preenchidos. Se o **Nº Externo** da tela estiver ausente em `d.DadosJson`, use **F2** no WebClient para identificar a origem técnica. Confirme quais tipos de texto podem ser exibidos ao público do app antes de liberar o acesso fora do teste local.
+Os arquivos ABAP em `sap/` são referências dos contratos anteriores. O JSON de exemplo representa o contrato publicado pelo `GET_ENTITY` atual.
 
 ## Testes com respostas simuladas
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
+
+Os testes simulam o Gateway e cobrem a consulta por chave em um GET, o mapeamento dos responsáveis, a preservação integral do log, o chamado inexistente, a validação da resposta, as datas, a configuração, a autenticação e falhas de conexão e timeout.

@@ -23,8 +23,9 @@ class Settings(BaseSettings):
     sap_bearer_token: SecretStr | None = None
     sap_ca_file: Path | None = None
     sap_timeout_seconds: Annotated[float, Field(gt=0, le=120)] = 15
-    sap_chamados_entity_set: NomeColecaoSap = "chamadosSet"
-    sap_details_entity_set: NomeColecaoSap | None = None
+    sap_chamados_entity_set: NomeColecaoSap = Field(
+        description="Nome da coleção OData que retorna o chamado completo; configure no .env"
+    )
     api_token: SecretStr | None = None
 
     @model_validator(mode="after")
@@ -35,7 +36,9 @@ class Settings(BaseSettings):
         ):
             raise ValueError("SAP_SERVICE_URL deve conter somente o endereço do serviço")
         last_segment = (url.path or "").rstrip("/").rsplit("/", 1)[-1]
-        if last_segment in {"$metadata", self.sap_chamados_entity_set, self.sap_details_entity_set}:
+        if last_segment in {"$metadata", self.sap_chamados_entity_set} or last_segment.startswith(
+            f"{self.sap_chamados_entity_set}("
+        ):
             raise ValueError("SAP_SERVICE_URL deve apontar para a raiz do serviço OData")
         if bool(self.sap_username) != bool(self.sap_password):
             raise ValueError("Preencha SAP_USERNAME e SAP_PASSWORD juntos")

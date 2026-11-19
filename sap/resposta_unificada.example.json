@@ -1,0 +1,21 @@
+{
+  "d": {
+    "Guid": "12345678-1234-4abc-8def-123456789abc",
+    "ObjectId": "0000000123",
+    "Description": "Chamado de exemplo",
+    "ProcessType": "Test",
+    "CreatedAt": "20240101100000",
+    "CreatedBy": "USUARIO_TESTE",
+    "ChangedAt": "20240102110000",
+    "ChangedBy": "USUARIO_TESTE",
+    "Status": "NEW (Novo)",
+    "ConsultorFuncional": "Consultor de exemplo",
+    "DesenvolvedorAbap": "Desenvolvedor de exemplo",
+    "ReferenciasExternas": "250728-1",
+    "Textos": "Descrição\n01.01.2024          07:00:00          USUARIO_TESTE\n\nCriação do chamado.",
+    "Estimativa": "0.000",
+    "DtIniDesenv": "/Date(1794960000000)/",
+    "DtFimDesenv": "/Date(1795046400000)/",
+    "DtDesejCliente": "/Date(1795132800000)/"
+  }
+}

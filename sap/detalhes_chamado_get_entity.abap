@@ -1,3 +1,5 @@
+" LEGADO: mantido como referência para serviços antigos; o Python não o utiliza.
+" A implementação unificada está em zcl_solman_chamados.clas.abap.
 " Corpo do método GetEntity de DetalheChamadoSet na classe DPC_EXT.
 TYPES: BEGIN OF ty_status,
          codigo    TYPE crm_jest-stat,
