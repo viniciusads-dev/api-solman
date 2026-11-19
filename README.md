@@ -56,7 +56,7 @@ Se configurou `API_TOKEN`, use **Authorize** no Swagger. `GET /health` verifica 
 
 ## Contrato da consulta
 
-Use `GET /api/v1/chamados?numero=0000000123`. Envie `numero` como texto com 1 a 10 dígitos para preservar zeros à esquerda. A API consulta o SAP por `ObjectId` e devolve `{"chamados": [...]}` com um item quando o chamado existe. Para um chamado inexistente, devolve `{"chamados": []}`. As datas de criação e atualização preenchidas são retornadas em ISO 8601 UTC.
+Use `GET /api/v1/chamados?numero=0000000123`. Envie `numero` como texto com 1 a 10 dígitos para preservar zeros à esquerda. A API consulta o SAP por `ObjectId` e devolve `{"chamados": [...]}` com um item quando o chamado existe. Para um chamado inexistente, devolve HTTP `404` com `{"detail": "Chamado não encontrado."}`. As datas de criação e atualização preenchidas são retornadas em ISO 8601 UTC.
 
 ### Campos da tela
 
@@ -85,7 +85,7 @@ Exemplo de URI montada pela API.
 
 Quando configurado, `sap-client` é acrescentado à query. O Gateway devolve uma entidade diretamente em `d` com os campos de cabeçalho e detalhes. A API verifica se o `ObjectId` corresponde ao número solicitado e valida os campos de detalhes conforme seus tipos. `Estimativa` tem precisão 13 e escala 3. As três datas de planejamento são `Edm.DateTime` no Gateway e chegam como `/Date(...)/`. A API devolve essas datas em `DD-MM-YYYY` para exibição direta. Datas ausentes ou nulas retornam `null`. Para ambientes com o contrato anterior, o decimal zero retorna `null` e os demais decimais continuam sendo repassados como strings. [Exemplo de resposta do SAP](sap/resposta_unificada.example.json)
 
-O `404` do Gateway com código OData `/IWBEP/CM_MGW_RT/020` indica chamado inexistente. Outros `404` do Gateway viram `502`. As datas do cabeçalho aceitam `/Date(...)/` e timestamps SAP de 14 dígitos, inclusive com fração decimal. Datas vazias ou zeradas tornam-se `null`.
+O `404` do Gateway com código OData `/IWBEP/CM_MGW_RT/020` indica chamado inexistente e vira `404` na API. Outros `404` do Gateway viram `502`. As datas do cabeçalho aceitam `/Date(...)/` e timestamps SAP de 14 dígitos, inclusive com fração decimal. Datas vazias ou zeradas tornam-se `null`.
 
 ## Consumir no front-end
 
@@ -137,7 +137,8 @@ export async function buscarChamados(numero, signal) {
     signal,
   })
   if (!resposta.ok) {
-    throw Object.assign(new Error('Falha na consulta do chamado.'), {
+    const mensagem = resposta.status === 404 ? 'Chamado não encontrado.' : 'Falha na consulta do chamado.'
+    throw Object.assign(new Error(mensagem), {
       status: resposta.status,
     })
   }
@@ -186,7 +187,7 @@ export function exibirLog(elemento, textos) {
 | Resposta | Estado da tela |
 |---|---|
 | `200` com um item em `chamados` | Mostre o chamado. |
-| `200` com `chamados: []` | Mostre **Chamado não encontrado neste ambiente**. |
+| `404` | Mostre **Chamado não encontrado**. |
 | `401` | Token da API ausente ou inválido. Verifique a autenticação no servidor que encaminha a chamada. |
 | `422` | Oriente o usuário a conferir o número informado. |
 | `502`, `504` ou erro de rede | Mostre **Não foi possível consultar o SAP agora**. Permita uma nova tentativa. |

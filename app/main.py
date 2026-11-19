@@ -46,15 +46,22 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/api/v1/chamados", dependencies=[Depends(autenticar)])
+@app.get(
+    "/api/v1/chamados",
+    dependencies=[Depends(autenticar)],
+    responses={404: {"description": "Chamado não encontrado."}},
+)
 async def consultar_chamados(
     request: Request,
     numero: Annotated[str, Query(pattern=r"^[0-9]{1,10}$", description="Número do chamado no SAP")],
 ) -> RespostaChamados:
     sap: SapGateway = request.app.state.sap
     try:
-        return RespostaChamados(chamados=await sap.consultar(numero))
+        chamados = await sap.consultar(numero)
     except TimeoutError as error:
         raise HTTPException(status_code=504, detail="O SAP demorou a responder.") from error
     except SapError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
+    if not chamados:
+        raise HTTPException(status_code=404, detail="Chamado não encontrado.")
+    return RespostaChamados(chamados=chamados)

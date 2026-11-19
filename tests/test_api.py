@@ -168,8 +168,8 @@ class TestApi(IsolatedAsyncioTestCase):
 
         async with api_client(sap) as client:
             resposta = await client.get(CHAMADO_URL)
-        self.assertEqual(resposta.status_code, 200)
-        self.assertEqual(resposta.json(), {"chamados": []})
+        self.assertEqual(resposta.status_code, 404)
+        self.assertEqual(resposta.json(), {"detail": "Chamado não encontrado."})
         self.assertEqual(len(requisicoes), 1)
 
     async def test_rejeita_object_id_diferente_do_solicitado(self):
